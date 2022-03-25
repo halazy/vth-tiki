@@ -1,6 +1,5 @@
 from secrets import choice
 from cv2 import threshold
-import pickle
 import streamlit as st
 import numpy as np
 import pandas as pd
