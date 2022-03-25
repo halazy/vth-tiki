@@ -5,7 +5,6 @@ matplotlib
 seaborn
 scikit-learn
 pickle-mixin
-math
 re
 io
 plotly_express
