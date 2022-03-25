@@ -11,4 +11,3 @@ gensim
 underthesea
 regex
 jieba
-secrets
