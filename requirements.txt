@@ -1,0 +1,17 @@
+streamlit
+numpy
+pandas
+matplotlib
+seaborn
+scikit-learn
+pickle
+math
+re
+io
+plotly_express
+scipy
+gensim
+underthesea
+regex
+jieba
+secrets
