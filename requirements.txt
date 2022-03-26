@@ -11,3 +11,6 @@ gensim
 underthesea
 regex
 jieba
+wordcloud
+pickle
+nltk

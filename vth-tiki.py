@@ -15,6 +15,7 @@ from gensim import corpora, models, similarities
 import jieba
 import re
 import regex
+from wordcloud import WordCloud
 
 from math import sqrt
 from scipy.stats import chi2_contingency
@@ -23,13 +24,192 @@ import scipy
 from numpy import dot
 from numpy.linalg import norm
 
+import pickle
+
+
 # 1. Read data
+
+# def data_loading():
+#     # read product data
+#     df = pd.read_csv('Product_new.csv')
+#     df = df.drop_duplicates()
+#     df = df.dropna()
+#     df.reset_index(inplace=True)
+
+#     # create a stop words list
+#     with open('resources/vietnamese-stopwords.txt', 'r', encoding='utf-8') as file:
+#         stop_words = file.read()
+#         stop_words = stop_words.split('\n')
+#     for word in ['thông_tin', 'chi_tiết', 'sản_phẩm', 'tiki']:
+#         stop_words.append(word)
+
+#     # overall preprocessing
+#     for col in ['name', 'description', 'brand', 'group']:
+#       df[col] = df[col].apply(lambda x: str(x).lower().replace('_', ' ').replace('\n', ' ').replace('.', ' '))
+
+#     # concate the information
+#     df['products'] = df.name + ' ' + df.description + ' ' + df.brand + ' ' + df.group
+
+#     # tokenize words
+#     df['products_wt'] = df['products'].apply(lambda x: word_tokenize(x, format='text'))
+
+#     return df, stop_words
+
+# def content_model():
+
+#     df, stop_words = data_loading()
+
+#     # Vectorize data
+#     tf = TfidfVectorizer(analyzer='word', min_df=0.1, stop_words=stop_words)
+#     tfidf_matrix = tf.fit_transform(df.products_wt)
+#     cosine_sim = cosine_similarity(tfidf_matrix, tfidf_matrix)
+
+#     return df, cosine_sim
+
+# def content_model_predict(product_list, top_n=5):
+#     cosine_sim = np.load("resources/cosine_sim.dat", allow_pickle=True)
+#     df = pd.read_csv('Product_new.csv')
+#     df = df.drop_duplicates()
+#     df = df.dropna()
+#     df.reset_index(inplace=True)
+#     indices = pd.Series(df['name'])
+
+#     # Getting the index of the products that matches the name
+#     idx_1 = indices[indices == product_list[0]].index[0]
+#     idx_2 = indices[indices == product_list[1]].index[0]
+#     idx_3 = indices[indices == product_list[2]].index[0]
+
+#     # Creating a Series with the similarity scores in descending order
+#     rank_1 = cosine_sim[idx_1]
+#     rank_2 = cosine_sim[idx_2]
+#     rank_3 = cosine_sim[idx_3]
+#     # Calculating the scores
+#     score_series_1 = pd.Series(rank_1).sort_values(ascending = False)
+#     score_series_2 = pd.Series(rank_2).sort_values(ascending = False)
+#     score_series_3 = pd.Series(rank_3).sort_values(ascending = False)
+#     # Getting the indexes of the 10 most similar products
+#     listings = score_series_1.append(score_series_1).append(score_series_3).\
+#                sort_values(ascending = False)
+
+#     # Store products' names
+#     recommended_products = []
+#     # Appending the names of movies
+#     top_50_indexes = list(listings.iloc[1:50].index)
+#     # Removing chosen movies
+#     top_indexes = np.setdiff1d(top_50_indexes,[idx_1,idx_2,idx_3])
+#     for i in top_indexes[:top_n]:
+#         recommended_products.append(list(df['name'])[i])
+
+#     return recommended_products
+
+
+# def collab_model_predict(user_id):
+#     df_product = pd.read_csv('Product_new.csv')
+#     user_recs = pd.read_parquet("resources/CF_recommendations.parquet", engine='pyarrow')
+#     id = user_recs[user_recs.customer_id == user_id].index[0]
+#     recommended_products_id = re.findall('product_id\'\:\s(\d+)',
+#                                          str(user_recs['recommendations'][id]))
+
+#     recommended_products = []
+#     for i in recommended_products_id:
+#         recommended_products.append(df_product['name'][df_product.item_id == int(i)].item())
+#     return recommended_products    
+
 df_product = pd.read_csv('Product_new.csv',encoding = 'utf-8')
 df_review = pd.read_csv('Review_new.csv',encoding = 'utf8', engine = 'python')
 
 # 2. Data pre-processing
+# Content-based filtering
+# chuan hoa text
+STOP_WORD_FILE = "vietnamese-stopwords.txt"
+with open(STOP_WORD_FILE, 'r', encoding = 'utf-8') as file:
+  stop_words = file.read()
+  
+stop_words = stop_words.split('\n')
+
+# Chuan hoa unicode
+import regex as re
+ 
+uniChars = "àáảãạâầấẩẫậăằắẳẵặèéẻẽẹêềếểễệđìíỉĩịòóỏõọôồốổỗộơờớởỡợùúủũụưừứửữựỳýỷỹỵÀÁẢÃẠÂẦẤẨẪẬĂẰẮẲẴẶÈÉẺẼẸÊỀẾỂỄỆĐÌÍỈĨỊÒÓỎÕỌÔỒỐỔỖỘƠỜỚỞỠỢÙÚỦŨỤƯỪỨỬỮỰỲÝỶỸỴÂĂĐÔƠƯ"
+unsignChars = "aaaaaaaaaaaaaaaaaeeeeeeeeeeediiiiiooooooooooooooooouuuuuuuuuuuyyyyyAAAAAAAAAAAAAAAAAEEEEEEEEEEEDIIIOOOOOOOOOOOOOOOOOOOUUUUUUUUUUUYYYYYAADOOU"
+ 
+ 
+def loaddicchar():
+    dic = {}
+    char1252 = 'à|á|ả|ã|ạ|ầ|ấ|ẩ|ẫ|ậ|ằ|ắ|ẳ|ẵ|ặ|è|é|ẻ|ẽ|ẹ|ề|ế|ể|ễ|ệ|ì|í|ỉ|ĩ|ị|ò|ó|ỏ|õ|ọ|ồ|ố|ổ|ỗ|ộ|ờ|ớ|ở|ỡ|ợ|ù|ú|ủ|ũ|ụ|ừ|ứ|ử|ữ|ự|ỳ|ý|ỷ|ỹ|ỵ|À|Á|Ả|Ã|Ạ|Ầ|Ấ|Ẩ|Ẫ|Ậ|Ằ|Ắ|Ẳ|Ẵ|Ặ|È|É|Ẻ|Ẽ|Ẹ|Ề|Ế|Ể|Ễ|Ệ|Ì|Í|Ỉ|Ĩ|Ị|Ò|Ó|Ỏ|Õ|Ọ|Ồ|Ố|Ổ|Ỗ|Ộ|Ờ|Ớ|Ở|Ỡ|Ợ|Ù|Ú|Ủ|Ũ|Ụ|Ừ|Ứ|Ử|Ữ|Ự|Ỳ|Ý|Ỷ|Ỹ|Ỵ'.split(
+        '|')
+    charutf8 = "à|á|ả|ã|ạ|ầ|ấ|ẩ|ẫ|ậ|ằ|ắ|ẳ|ẵ|ặ|è|é|ẻ|ẽ|ẹ|ề|ế|ể|ễ|ệ|ì|í|ỉ|ĩ|ị|ò|ó|ỏ|õ|ọ|ồ|ố|ổ|ỗ|ộ|ờ|ớ|ở|ỡ|ợ|ù|ú|ủ|ũ|ụ|ừ|ứ|ử|ữ|ự|ỳ|ý|ỷ|ỹ|ỵ|À|Á|Ả|Ã|Ạ|Ầ|Ấ|Ẩ|Ẫ|Ậ|Ằ|Ắ|Ẳ|Ẵ|Ặ|È|É|Ẻ|Ẽ|Ẹ|Ề|Ế|Ể|Ễ|Ệ|Ì|Í|Ỉ|Ĩ|Ị|Ò|Ó|Ỏ|Õ|Ọ|Ồ|Ố|Ổ|Ỗ|Ộ|Ờ|Ớ|Ở|Ỡ|Ợ|Ù|Ú|Ủ|Ũ|Ụ|Ừ|Ứ|Ử|Ữ|Ự|Ỳ|Ý|Ỷ|Ỹ|Ỵ".split(
+        '|')
+    for i in range(len(char1252)):
+        dic[char1252[i]] = charutf8[i]
+    return dic
+ 
+ 
+dicchar = loaddicchar()
+ 
+ 
+def covert_unicode(txt):
+    return re.sub(
+        r'à|á|ả|ã|ạ|ầ|ấ|ẩ|ẫ|ậ|ằ|ắ|ẳ|ẵ|ặ|è|é|ẻ|ẽ|ẹ|ề|ế|ể|ễ|ệ|ì|í|ỉ|ĩ|ị|ò|ó|ỏ|õ|ọ|ồ|ố|ổ|ỗ|ộ|ờ|ớ|ở|ỡ|ợ|ù|ú|ủ|ũ|ụ|ừ|ứ|ử|ữ|ự|ỳ|ý|ỷ|ỹ|ỵ|À|Á|Ả|Ã|Ạ|Ầ|Ấ|Ẩ|Ẫ|Ậ|Ằ|Ắ|Ẳ|Ẵ|Ặ|È|É|Ẻ|Ẽ|Ẹ|Ề|Ế|Ể|Ễ|Ệ|Ì|Í|Ỉ|Ĩ|Ị|Ò|Ó|Ỏ|Õ|Ọ|Ồ|Ố|Ổ|Ỗ|Ộ|Ờ|Ớ|Ở|Ỡ|Ợ|Ù|Ú|Ủ|Ũ|Ụ|Ừ|Ứ|Ử|Ữ|Ự|Ỳ|Ý|Ỷ|Ỹ|Ỵ',
+        lambda x: dicchar[x.group()], txt)
 
 
+def chuan_hoa_dau_cau_tieng_viet(sentence):
+    sentence = sentence.lower()
+    words = sentence.split()
+    for index, word in enumerate(words):
+        cw = re.sub(r'(^\p{P}*)([p{L}.]*\p{L}+)(\p{P}*$)', r'\1/\2/\3', word).split('/')
+        # print(cw)
+        if len(cw) == 3:
+            cw[1] = chuan_hoa_dau_tu_tieng_viet(cw[1])
+        words[index] = ''.join(cw)
+    return ' '.join(words)
+
+# Loại bỏ NaN trong description
+df_product = df_product[~df_product['description'].isnull()].reset_index()
+df_product = df_product.drop('index', axis=1)
+
+df_product['recommend'] = df_product['name'] + df_product['description']
+
+# Cosine-similarity
+X =  [1,2]
+Y = [2,2]
+cos_sim = dot(X, Y)/(norm(X)*norm(Y))
+tf = TfidfVectorizer(analyzer="word", min_df = 0, stop_words = stop_words)
+tfidf_matrix = tf.fit_transform(df_product['recommend'].values.astype('U'))
+cosine_similarities = cosine_similarity(tfidf_matrix,tfidf_matrix)
+# với mỗi sản phẩm, lấy 10 sản phẩm tương quan nhất
+results = {}
+
+for idx, row in df_product.iterrows():
+    similar_indices = cosine_similarities[idx].argsort()[:-11:-1] #argsort() là sắp xếp tăng dần
+    similar_items = [(cosine_similarities[idx][i], df_product['item_id'][i]) for i in similar_indices]
+    results[row['item_id']] = similar_items[1:] #bỏ đi phần tử 0 là chính nó
+
+# Xây dựng hàm lấy thông tin sản phẩm
+def item(product_id):
+    return df_product.loc[df_product['item_id'] == product_id]['name'].tolist()[0].split('-')[0]
+
+def recommend(product_id, num):
+    print('Recommending products similar to ' + item(product_id) + ':')
+    recs = results[product_id][:num]
+    for rec in recs:
+        print(rec[1])
+        print('Recommend: product id:' + str(rec[1]) +', ' + item(rec[1]) + ' (score:' + str(rec[0]) + ")")  
+
+
+# Save model
+info = []
+for p_id, v in results.items():
+    for item in v:
+        info.append({
+            'product_id': p_id,
+            'rcmd_product_id': item[1],
+            'score': item[0]
+        })
+content_based_cosine_df = pd.DataFrame(info)
+
+content_based_cosine_df.to_csv('Content_based_cosine_info.csv')
 
 
 #--------------
@@ -104,6 +284,7 @@ elif choice == 'Build Project':
     st.write("""- Sử dụng Mô hình TF-IDF để xử lý kho dữ liệu.""")
     st.write("""- Xây dựng hàm lấy thông tin sản phẩm tương tự, bao gồm: ID sản phẩm, tên sản phẩm, score sản phẩm.""")
     st.write("""- Trực quan hoá bằng Word-Cloud cho sản phẩm và các sản phẩm tương tự.""")
+    st.image("word-cloud.png")
 
     st.write('3. ALS Model')
     st.write('Các bước thực hiện:')
@@ -126,6 +307,64 @@ elif choice == 'Build Project':
     
 
 elif choice == 'Recommender':
-    st.subheader('Select data')
+    st.subheader('Make new Prediction')
+
+    name1 = st.text_input('Customer ID (6177374, 1827148...)')
+    if name1!="":
+        recommend = content_model_predict(name1)
+    st.write("## We think you'd like to see more of these items:")
+    for i,j in enumerate(recommend):
+        st.write(str(i+1)+'. '+j)
+    name2 = st.text_input('Product ID (3792857, 1060082...)')  
+    pclass  = st.selectbox("Product Keywords", options=['Tivi', 'Tủ lạnh','Loa','Laptop','Camera','Khác'])
+    st.write('#### Suggested Products')
+
+
+
+    # st.write('## Please Input Product ID:')
+    # chosen_product = st.text_input('Product ID')
+
+    # if st.button("Recommend (CB)"):
+    #     try:
+    #         with st.spinner('Crunching the numbers...'):
+    #             top_recommendations = content_model_predict(chosen_product)
+    #         st.write("## We think you'd like to see more of these items:")
+    #         for i,j in enumerate(top_recommendations):
+    #             st.write(str(i+1)+'. '+j)
+    #     except:
+    #         st.error("Oops! Looks like this algorithm does't work.\
+    #                     We'll need to fix it!")
+
+    # st.write('## Please Input User ID:')
+    # chosen_user = st.text_input('User ID')
+
+    # if st.button("See Profile"):
+    #     try:
+    #         with st.spinner('Loading...'):
+    #             user_name = load_user_name(chosen_user)
+    #             reviewed_products, rating = load_user_reviews(chosen_user)
+    #         st.write('User Name: ' + user_name)
+    #         for i,j in enumerate(reviewed_products):
+    #             st.write(str(i+1) + '. ' + j + ' | Given rating: '+ str(rating[i]))
+    #     except:
+    #         st.error("Oops! Looks like something does't work.\
+    #                         Please choose another one.")
+
+    # if st.button("Recommend (UB)"):
+    #     try:
+    #         with st.spinner('Crunching the numbers...'):
+    #             top_recommendations = collab_model_predict(user_id)
+    #         st.write("## We think you'd like to see more of these items:")
+    #         for i,j in enumerate(top_recommendations):
+    #             st.write(str(i+1)+'. '+j)
+    #     except:
+    #         st.error("Oops! Looks like this algorithm does't work.\
+    #                         We'll need to fix it!")
+
+
+
+
+
+
 
 
